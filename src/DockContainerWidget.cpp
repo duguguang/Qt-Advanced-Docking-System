@@ -122,14 +122,36 @@ static int areaIdToIndex(DockWidgetArea area)
  */
 static void insertWidgetIntoSplitter(QSplitter* Splitter, QWidget* widget, bool Append)
 {
+	auto overlaySize = widget->size();
+
+	QList<int> sl;
 	if (Append)
 	{
 		Splitter->addWidget(widget);
+		sl = Splitter->sizes();
+		sl.last() = Splitter->orientation() == Qt::Horizontal ? overlaySize.width(): overlaySize.height();
+		for (int i = 0; i < Splitter->count(); ++i)
+		{
+			Splitter->setStretchFactor(i, 1);
+		}
+
+		Splitter->setStretchFactor(sl.count() - 1, 0);
 	}
 	else
 	{
 		Splitter->insertWidget(0, widget);
+		sl = Splitter->sizes();
+		sl.first() = Splitter->orientation() == Qt::Horizontal ? overlaySize.width() : overlaySize.height();
+		for (int i = 0; i < Splitter->count(); ++i)
+		{
+			Splitter->setStretchFactor(i, 1);
+		}
+
+		Splitter->setStretchFactor(0, 0);
 	}
+
+	Splitter->setSizes(sl);
+
 }
 
 /**
@@ -1782,6 +1804,8 @@ void CDockContainerWidget::dropFloatingWidget(CFloatingDockContainer* FloatingWi
 void CDockContainerWidget::dropWidget(QWidget* Widget, DockWidgetArea DropArea, CDockAreaWidget* TargetAreaWidget,
 	int TabIndex)
 {
+	Widget->resize(d->DockManager->containerOverlay()->dropOverlayRect().size());
+
     CDockWidget* SingleDockWidget = topLevelDockWidget();
 	if (TargetAreaWidget)
 	{
