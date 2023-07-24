@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 
+get_filename_component(DIR_ONE_ABOVE ../ ABSOLUTE)
+set(THIRDPARTY_DIR ${DIR_ONE_ABOVE})
+set(ADS_VERSION 4.1.1)
 # By default, the version information is extracted from the git index. However,
 # we can override this behavior by explicitly setting ADS_VERSION and
 # skipping the git checks. This is useful for cases where this project is being
@@ -27,6 +30,15 @@ project(QtADS LANGUAGES CXX VERSION ${VERSION_SHORT})
 
 option(BUILD_STATIC "Build the static library" OFF)
 option(BUILD_EXAMPLES "Build the examples" ON)
+
+if(CMAKE_HOST_UNIX)
+  set(CMAKE_PREFIX_PATH "/usr/local/qt-qt-5.15.2/bin")
+else()
+  set(CMAKE_PREFIX_PATH "${THIRDPARTY_DIR}/Qt5.15.2/5.15.2/msvc2019_64/lib/cmake")
+endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/install")
 
 if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
     set(ads_PlatformDir "x86")
