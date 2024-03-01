@@ -163,7 +163,7 @@ public:
 	CDockContainerWidget* _this;
 	QPointer<CDockManager> DockManager;
 	unsigned int zOrderIndex = 0;
-	QList<CDockAreaWidget*> DockAreas;
+	QList<QPointer<CDockAreaWidget>> DockAreas;
 	QList<CAutoHideDockContainer*> AutoHideWidgets;
 	QMap<SideBarLocation, CAutoHideSideBar*> SideTabBarWidgets;
 	QGridLayout* Layout = nullptr;
@@ -321,7 +321,11 @@ public:
 		VisibleDockAreaCount = 0;
 		for (auto DockArea : DockAreas)
 		{
-			VisibleDockAreaCount += DockArea->isHidden() ? 0 : 1;
+			if (!DockArea)
+			{
+				continue;
+			}
+			VisibleDockAreaCount += (DockArea->isHidden() ? 0 : 1);
 		}
 	}
 
@@ -609,16 +613,7 @@ void DockContainerWidgetPrivate::dropIntoSection(CFloatingDockContainer* Floatin
 	auto InsertParam = internal::dockAreaInsertParameters(area);
 	auto NewDockAreas = FloatingContainer->findChildren<CDockAreaWidget*>(
 		QString(), Qt::FindChildrenRecursively);
-	QSplitter* TargetAreaSplitter = internal::findParent<QSplitter*>(TargetArea);
-
-	if (!TargetAreaSplitter)
-	{
-		QSplitter* Splitter = newSplitter(InsertParam.orientation());
-		Layout->replaceWidget(TargetArea, Splitter);
-		Splitter->addWidget(TargetArea);
-        updateSplitterHandles(Splitter);
-        TargetAreaSplitter = Splitter;
-	}
+	auto TargetAreaSplitter = TargetArea->parentSplitter();
 	int AreaIndex = TargetAreaSplitter->indexOf(TargetArea);
 	auto FloatingSplitter = FloatingContainer->rootSplitter();
 	if (TargetAreaSplitter->orientation() == InsertParam.orientation())
@@ -764,7 +759,7 @@ void DockContainerWidgetPrivate::moveToNewSection(QWidget* Widget, CDockAreaWidg
 	}
 
 	auto InsertParam = internal::dockAreaInsertParameters(area);
-	QSplitter* TargetAreaSplitter = internal::findParent<QSplitter*>(TargetArea);
+	auto TargetAreaSplitter = TargetArea->parentSplitter();
 	int AreaIndex = TargetAreaSplitter->indexOf(TargetArea);
 	auto Sizes = TargetAreaSplitter->sizes();
 	if (TargetAreaSplitter->orientation() == InsertParam.orientation())
@@ -899,7 +894,7 @@ void DockContainerWidgetPrivate::moveToContainer(QWidget* Widget, DockWidgetArea
 		// it already has and do nothing, if it is the same place. It would
 		// also work without this check, but it looks nicer with the check
 		// because there will be no layout updates
-		auto Splitter = internal::findParent<CDockSplitter*>(DroppedDockArea);
+		auto Splitter = DroppedDockArea->parentSplitter();
 		auto InsertParam = internal::dockAreaInsertParameters(area);
 		if (Splitter == RootSplitter && InsertParam.orientation() == Splitter->orientation())
 		{
@@ -955,7 +950,10 @@ void DockContainerWidgetPrivate::addDockAreasToList(const QList<CDockAreaWidget*
 //============================================================================
 void DockContainerWidgetPrivate::appendDockAreas(const QList<CDockAreaWidget*> NewDockAreas)
 {
-	DockAreas.append(NewDockAreas);
+	for (auto *newDockArea : NewDockAreas)
+	{
+		DockAreas.append(newDockArea);
+	}
 	for (auto DockArea : NewDockAreas)
 	{
 		QObject::connect(DockArea,
@@ -1386,7 +1384,7 @@ CDockAreaWidget* DockContainerWidgetPrivate::addDockWidgetToDockArea(DockWidgetA
 	NewDockArea->addDockWidget(Dockwidget);
 	auto InsertParam = internal::dockAreaInsertParameters(area);
 
-	QSplitter* TargetAreaSplitter = internal::findParent<QSplitter*>(TargetDockArea);
+	auto TargetAreaSplitter = TargetDockArea->parentSplitter();
 	int index = TargetAreaSplitter ->indexOf(TargetDockArea);
 	if (TargetAreaSplitter->orientation() == InsertParam.orientation())
 	{
@@ -1403,7 +1401,7 @@ CDockAreaWidget* DockContainerWidgetPrivate::addDockWidgetToDockArea(DockWidgetA
 	{
 		ADS_PRINT("TargetAreaSplitter->orientation() != InsertParam.orientation()");
 		auto TargetAreaSizes = TargetAreaSplitter->sizes();
-		QSplitter* NewSplitter = newSplitter(InsertParam.orientation());
+		auto NewSplitter = newSplitter(InsertParam.orientation());
 		NewSplitter->addWidget(TargetDockArea);
 
 		insertWidgetIntoSplitter(NewSplitter, NewDockArea, InsertParam.append());
@@ -1594,7 +1592,7 @@ void CDockContainerWidget::removeDockArea(CDockAreaWidget* area)
 
 	area->disconnect(this);
 	d->DockAreas.removeAll(area);
-	CDockSplitter* Splitter = internal::findParent<CDockSplitter*>(area);
+	auto Splitter = area->parentSplitter();
 
 	// Remove are from parent splitter and recursively hide tree of parent
 	// splitters if it has no visible content
@@ -1668,11 +1666,20 @@ emitAndExit:
 
 
 //============================================================================
+QList<QPointer<CDockAreaWidget>> CDockContainerWidget::removeAllDockAreas()
+{
+	auto Result = d->DockAreas;
+	d->DockAreas.clear();
+	return Result;
+}
+
+
+//============================================================================
 CDockAreaWidget* CDockContainerWidget::dockAreaAt(const QPoint& GlobalPos) const
 {
 	for (const auto& DockArea : d->DockAreas)
 	{
-		if (DockArea->isVisible() && DockArea->rect().contains(DockArea->mapFromGlobal(GlobalPos)))
+		if (DockArea && DockArea->isVisible() && DockArea->rect().contains(DockArea->mapFromGlobal(GlobalPos)))
 		{
 			return DockArea;
 		}
@@ -1709,7 +1716,7 @@ int CDockContainerWidget::visibleDockAreaCount() const
 	int Result = 0;
 	for (auto DockArea : d->DockAreas)
 	{
-		Result += DockArea->isHidden() ? 0 : 1;
+		Result += (!DockArea || DockArea->isHidden()) ? 0 : 1;
 	}
 
 	return Result;
@@ -1780,7 +1787,7 @@ void CDockContainerWidget::dropFloatingWidget(CFloatingDockContainer* FloatingWi
 	if (Dropped)
 	{ 
 		// Fix https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System/issues/351
-		FloatingWidget->hideAndDeleteLater();
+		FloatingWidget->finishDropOperation();
 
 		// If we dropped a floating widget with only one single dock widget, then we
 		// drop a top level widget that changes from floating to docked now
@@ -1837,7 +1844,7 @@ QList<CDockAreaWidget*> CDockContainerWidget::openedDockAreas() const
 	QList<CDockAreaWidget*> Result;
 	for (auto DockArea : d->DockAreas)
 	{
-		if (!DockArea->isHidden())
+		if (DockArea && !DockArea->isHidden())
 		{
 			Result.append(DockArea);
 		}
@@ -1853,7 +1860,7 @@ QList<CDockWidget*> CDockContainerWidget::openedDockWidgets() const
 	QList<CDockWidget*> DockWidgetList;
 	for (auto DockArea : d->DockAreas)
 	{
-		if (!DockArea->isHidden())
+		if (DockArea && !DockArea->isHidden())
 		{
 			DockWidgetList.append(DockArea->openedDockWidgets());
 		}
@@ -1868,7 +1875,7 @@ bool CDockContainerWidget::hasOpenDockAreas() const
 {
 	for (auto DockArea : d->DockAreas)
 	{
-		if (!DockArea->isHidden())
+		if (DockArea && !DockArea->isHidden())
 		{
 			return true;
 		}
@@ -1969,7 +1976,7 @@ bool CDockContainerWidget::restoreState(CDockingStateReader& s, bool Testing)
 
 
 //============================================================================
-QSplitter* CDockContainerWidget::rootSplitter() const
+CDockSplitter* CDockContainerWidget::rootSplitter() const
 {
 	return d->RootSplitter;
 }
@@ -2091,8 +2098,12 @@ CDockAreaWidget* CDockContainerWidget::topLevelDockArea() const
 QList<CDockWidget*> CDockContainerWidget::dockWidgets() const
 {
 	QList<CDockWidget*> Result;
-	for (const auto DockArea : d->DockAreas)
+    for (const auto& DockArea : d->DockAreas)
 	{
+		if (!DockArea)
+		{
+			continue;
+		}
 		Result.append(DockArea->dockWidgets());
 	}
 
@@ -2123,8 +2134,12 @@ void CDockContainerWidget::removeAutoHideWidget(CAutoHideDockContainer* Autohide
 CDockWidget::DockWidgetFeatures CDockContainerWidget::features() const
 {
 	CDockWidget::DockWidgetFeatures Features(CDockWidget::AllDockWidgetFeatures);
-	for (const auto DockArea : d->DockAreas)
+    for (const auto& DockArea : d->DockAreas)
 	{
+		if (!DockArea)
+		{
+			continue;
+		}
 		Features &= DockArea->features();
 	}
 
@@ -2142,9 +2157,9 @@ CFloatingDockContainer* CDockContainerWidget::floatingWidget() const
 //============================================================================
 void CDockContainerWidget::closeOtherAreas(CDockAreaWidget* KeepOpenArea)
 {
-	for (const auto DockArea : d->DockAreas)
+    for (const auto& DockArea : d->DockAreas)
 	{
-		if (DockArea == KeepOpenArea)
+		if (!DockArea || DockArea == KeepOpenArea)
 		{
 			continue;
 		}
