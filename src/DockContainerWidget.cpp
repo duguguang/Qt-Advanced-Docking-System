@@ -1804,7 +1804,9 @@ void CDockContainerWidget::dropFloatingWidget(CFloatingDockContainer* FloatingWi
 void CDockContainerWidget::dropWidget(QWidget* Widget, DockWidgetArea DropArea, CDockAreaWidget* TargetAreaWidget,
 	int TabIndex)
 {
-	Widget->resize(d->DockManager->containerOverlay()->dropOverlayRect().size());
+	auto containerOverlayRect = d->DockManager->containerOverlay()->dropOverlayRect().size();
+	auto areaOverlayRect = d->DockManager->dockAreaOverlay()->dropOverlayRect().size();
+	Widget->resize(areaOverlayRect.isValid()? areaOverlayRect : containerOverlayRect);
 
     CDockWidget* SingleDockWidget = topLevelDockWidget();
 	if (TargetAreaWidget)
